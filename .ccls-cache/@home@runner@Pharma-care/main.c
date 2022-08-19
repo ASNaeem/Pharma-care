@@ -1,74 +1,175 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
-int top = -1;
-// const char MED_DATA_FORMAT_IN = "{Brand name: %s\nGeneric name:
-// %s\nManufaacturer: %s\nDosage form: %s\n}\n";
+#define MAX 100
+const char *MED_DATA_FORMAT_IN =
+    "{\"Brand name\": \"%[^\"]\", \"Generic name\": \"%[^\"]\", "
+    "\"Manufacturer\": \"%[^\"]\", \"Dosage form\": \"%[^\"]\", \"Strength\": "
+    "\"%[^\"]\", \"Price/Pack\": %lf, \"Price/Unit\": %lf, \"In stock\": "
+    "%d, "
+    "\"Indications\": \"%[^\"]\"}\n";
+const char *MED_DATA_FORMAT_OUT =
+    "{\"Brand name\": \"%s\", \"Generic name\": \"%s\", \"Manufacturer\": "
+    "\"%s\", \"Dosage form\": \"%s\", \"Strength\": \"%s\", \"Price/Pack\": "
+    "%lf, \"Price/Unit\": %lf, \"In stock\": %d, \"Indications\": \"%s\"}\n";
+const char *MED_DATA_FORMAT_CONSOLE = {
+    "Brand name: %s\nGeneric name: %s\nManufacturer: %s\nDosage form: "
+    "%s\nStrength: %s\nPrice/Pack: %.2lf\nPrice/Unit: %.2lf\nIn stock: "
+    "%d\nIndications: %s\n\n"};
 typedef struct med {
-  char brandName[20];
-  char genericName[20];
-  char manufacturingCompany[30];
-  char dosageForm[20];
-  char strength[10];
+  char brandName[100];
+  char genericName[100];
+  char manufacturingCompany[100];
+  char dosageForm[30];
+  char strength[30];
   double pricePerPack;
   double pricePerUnit;
   int inStock;
-  char indications[300];
+  char indications[1000];
 } med;
-med drug[10];
-void addNew() {
-  top++;
-  printf("Brand name: ");
-  scanf("%20[^\n]%*c", drug[top].brandName);
-  printf("Generic name: ");
-  scanf("%20[^\n]%*c", drug[top].genericName);
-  printf("Manufacturing company: ");
-  scanf("%20[^\n]%*c", drug[top].manufacturingCompany);
-  printf("Dosage form: ");
-  scanf("%20[^\n]%*c", drug[top].dosageForm);
-  printf("Dose strength: ");
-  scanf("%20[^\n]%*c", drug[top].strength);
-
-  printf("Price/unit: ");
-  scanf("%lf", &drug[top].pricePerUnit);
-  printf("Price/pack: ");
-  scanf("%lf", &drug[top].pricePerPack);
-  printf("In stock: ");
-  scanf("%d", &drug[top].inStock);
-
-  printf("Indications: ");
-  scanf(" %300[^\n]%*c", drug[top].indications);
-  printf("\n\n");
-}
-void display() {
-  if (top < 0) {
-    printf("List is empty\n");
+med drug[MAX];
+int top = -1;
+void addToFile() {
+  FILE *fpwrite, *fptop;
+  fpwrite = fopen("medinfo.dat", "w");
+  fptop = fopen("top.dat", "w");
+  if (fpwrite == NULL || fptop == NULL) {
+    printf("Failed to write!\n");
+    exit(1);
   }
-  for (int i = 0; i <= top; i++) {
-    printf("Brand name: %s\n", drug[i].brandName);
-    printf("Generic name: %s\n", drug[i].genericName);
-    printf("Manufacturer: %s\n", drug[i].manufacturingCompany);
-    printf("Dosage form: %s\n", drug[i].dosageForm);
-    printf("Strength: %s\n", drug[i].strength);
-    printf("Price/unit: %.2lf\n", drug[i].pricePerUnit);
-    printf("Price/pack: %.2lf\n", drug[i].pricePerPack);
-    printf("In stock: %d\n", drug[i].inStock);
-    printf("Indications: %s\n", drug[i].indications);
-    printf("\n\n");
+  int err = 0, i = 0;
+  while (i <= top) {
+    err += fprintf(fpwrite, MED_DATA_FORMAT_OUT, drug[i].brandName,
+                   drug[i].genericName, drug[i].manufacturingCompany,
+                   drug[i].dosageForm, drug[i].strength, drug[i].pricePerPack,
+                   drug[i].pricePerUnit, drug[i].inStock, drug[i].indications);
+    i++;
+  }
+  fprintf(fptop, "%d", top);
+  if (err != 0)
+    printf("\nData saved!");
+  fclose(fptop);
+  fclose(fpwrite);
+}
+void addNew() {
+  if (top <= MAX) {
+    top++;
+    printf("Brand name: ");
+    fflush(stdin);
+    scanf("%[^\n]%*c", drug[top].brandName);
+    printf("Generic name: ");
+    fflush(stdin);
+    scanf("%[^\n]%*c", drug[top].genericName);
+    printf("Manufacturing company: ");
+    fflush(stdin);
+    scanf("%[^\n]%*c", drug[top].manufacturingCompany);
+    printf("Dosage form: ");
+    fflush(stdin);
+    scanf("%[^\n]%*c", drug[top].dosageForm);
+    printf("Dose strength: ");
+    fflush(stdin);
+    scanf("%[^\n]%*c", drug[top].strength);
+
+    printf("Price/pack: ");
+    fflush(stdin);
+    scanf("%lf", &drug[top].pricePerPack);
+    printf("Price/unit: ");
+    fflush(stdin);
+    scanf("%lf", &drug[top].pricePerUnit);
+
+    printf("In stock: ");
+    fflush(stdin);
+    scanf("%d", &drug[top].inStock);
+
+    printf("Indications: ");
+    fflush(stdin);
+    scanf(" %[^\n]%*c", drug[top].indications);
+    fflush(stdin);
+
+    printf("\n");
+    addToFile();
+  } else
+    printf("Maximum stack size reached\n");
+}
+void loadAll() {
+
+  FILE *fpr, *ftop;
+  ftop = fopen("top.dat", "r");
+  fpr = fopen("medinfo.dat", "r");
+  if (fpr == NULL || ftop == NULL) {
+    fprintf(stderr, "Error while opening file!");
+    exit(1);
+  }
+  fscanf(ftop, "%d", &top);
+  int i = 0;
+  int err = 0;
+  printf("\ntop index: %d\n", top);
+  while (i <= top) {
+
+    err += fscanf(fpr, MED_DATA_FORMAT_IN, drug[i].brandName,
+                  drug[i].genericName, drug[i].manufacturingCompany,
+                  drug[i].dosageForm, drug[i].strength, &drug[i].pricePerPack,
+                  &drug[i].pricePerUnit, &drug[i].inStock, drug[i].indications);
+    i++;
+  }
+  printf("data read: %d\n", err / 9);
+  fclose(ftop);
+  fclose(fpr);
+}
+
+void display() {
+  int i = 0;
+  while (i <= top) {
+    printf(MED_DATA_FORMAT_CONSOLE, drug[i].brandName, drug[i].genericName,
+           drug[i].manufacturingCompany, drug[i].dosageForm, drug[i].strength,
+           drug[i].pricePerPack, drug[i].pricePerUnit, drug[i].inStock,
+           drug[i].indications);
+    i++;
   }
 }
 int main() {
-  top++;
-  strcpy(drug[top].brandName, "Napa");
-  strcpy(drug[top].genericName, "Paracetamol");
-  strcpy(drug[top].manufacturingCompany, "Beximco Pharmaceuticals Ltd.");
-  strcpy(drug[top].dosageForm, "Tablet");
-  strcpy(drug[top].strength, "500mg");
-  drug[top].pricePerUnit = 20;
-  drug[top].pricePerPack = 220;
-  drug[top].inStock = 50;
-  strcpy(drug[top].indications, "Used for Fever and cold");
+  loadAll();
+
+  int choice;
+  // while (choice != 0) {
+  //   printf("1.Create a new medicine data\n");
+  //   printf("2.Remove a medicine data\n");
+  //   printf("3.Update an old medicine data\n");
+  //   printf("4.Display all medicine data\n");
+  //   printf("5.Search a medicine data\n");
+  //   printf("6.Sells\n");
+  //   printf("7.Dealers\n");
+  //   printf("0.Logout\n\n");
+
+  //   printf("Option: ");
+  //  fflush(stdin);
+  //   scanf("%d", &choice);
+  //   printf("\n");
+  //   switch (choice) {
+  //   case 1: addNew();
+  //     break;
+  //   case 2:
+  //     break;
+  //   case 3:
+  //     break;
+  //   case 4:
+  //     display();
+  //     break;
+  //   case 5:
+  //     break;
+  //   case 6:
+  //     break;
+  //   case 7:
+  //     break;
+  //   case 0:
+  //     printf("Logging out\n");
+  //     exit(1);
+  //     break;
+  //   }
+  //  fflush(stdin);
+  // }
   display();
-  addNew();
-  display();
+  // addNew();
+
   return 0;
 }
