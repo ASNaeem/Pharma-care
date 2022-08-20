@@ -127,6 +127,32 @@ void display() {
     i++;
   }
 }
+int returnToMain() { return 0; }
+void search() {
+  char key[100];
+  char const *string = "some value of string";
+	char const *back = "0";
+mac:
+printf("Input the search key (0 to return): ");
+  scanf("%[^\n]%*c", key);
+  if (strstr(key, back))
+    returnToMain();
+  else if (strlen(key) < 3) {
+    printf("\nPlease input at least 3 characters!\n");
+    goto mac;
+  } else {
+    for (int i = 0; i <= top; i++) {
+      if (strstr(drug[i].brandName, key) || strstr(drug[i].genericName, key) ||
+          strstr(drug[i].manufacturingCompany, key) ||
+          strstr(drug[i].indications, key)) {
+        printf(MED_DATA_FORMAT_CONSOLE, drug[i].brandName, drug[i].genericName,
+               drug[i].manufacturingCompany, drug[i].dosageForm,
+               drug[i].strength, drug[i].pricePerPack, drug[i].pricePerUnit,
+               drug[i].inStock, drug[i].indications);
+      }
+    }
+  }
+}
 int main() {
   loadAll();
 
@@ -168,8 +194,9 @@ int main() {
   //   }
   //  fflush(stdin);
   // }
-  display();
+  // display();
   // addNew();
-
+  search();
+ // display();
   return 0;
 }
