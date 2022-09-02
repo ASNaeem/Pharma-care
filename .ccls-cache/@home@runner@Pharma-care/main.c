@@ -12,11 +12,22 @@ void display();
 void search();
 void delData();
 void editData();
+void addSupplier();
+void displaySupplier();
+void searchSupplier();
+void delSupplier();
+void editSupplier();
+void updatefileSup();
 void AdminPanel();
+void supplierPanel();
 void loginInfoWrite();
 void loginInfoRead();
+void orderInfoWrite();
+void orderInfoRead();
+void displayOrder();
 void contactInfo();
 void goBack();
+
 
 const char *UB = "_________________________________________\n";
 const char *L = {"|"};
@@ -39,6 +50,24 @@ const char *MED_DATA_FORMAT_CONSOLE = {
     "form: "
     "%s\nStrength: %s\nPrice/Pack: %.2lf\nPrice/Unit: %.2lf\nIn stock: "
     "%d\nIndications: %s\n\n"};
+const char *SUP_DATA_FORMAT_OUT = "{\"Suppiler ID\": %d, \"Company Name\": "
+                                  "\"%s\", \"Dealer's Name\": \"%s\", \"Phone "
+                                  "Number\":\"%s\", \"Email\": \"%s\"}\n";
+const char *SUP_DATA_FORMAT_IN =
+    "{\"Suppiler ID\": %d, \"Company Name\": \"%[^\"]\", \"Dealer's Name\": "
+    "\"%[^\"]\", \"Phone Number\": \"%[^\"]\", \"Email\": \"%[^\"]\"}\n";
+
+typedef struct supplier {
+  int supID;
+  char comName[100];
+  char salesMan[30];
+  char phnNum[20];
+  char email[50];
+} supplier;
+
+supplier sup[100];
+int sTop = -1;
+int foundIndex = -1;
 
 typedef struct med {
   int MedID;
@@ -47,6 +76,7 @@ typedef struct med {
   char manufacturingCompany[100];
   char dosageForm[30];
   char strength[30];
+  int packSize;
   double pricePerPack;
   double pricePerUnit;
   int inStock;
@@ -94,70 +124,73 @@ void addNew() {
     printf("MedID: %d\n", top + 101);
     drug[top].MedID = top + 101;
     printf("Brand name: ");
-    fflush(stdin);
     scanf(" %[^\n]%*c", drug[top].brandName);
     printf("Generic name: ");
-    fflush(stdin);
     scanf("%[^\n]%*c", drug[top].genericName);
     printf("Manufacturing company: ");
-    fflush(stdin);
     scanf("%[^\n]%*c", drug[top].manufacturingCompany);
     printf("Dosage form: ");
-    fflush(stdin);
     scanf("%[^\n]%*c", drug[top].dosageForm);
     printf("Dose strength: ");
-    fflush(stdin);
     scanf("%[^\n]%*c", drug[top].strength);
 
     printf("Price/pack: ");
-    fflush(stdin);
     scanf("%lf", &drug[top].pricePerPack);
     printf("Price/unit: ");
-    fflush(stdin);
     scanf("%lf", &drug[top].pricePerUnit);
 
-    printf("In stock: ");
-    fflush(stdin);
+    printf("In stock(unit): ");
     scanf("%d", &drug[top].inStock);
 
     printf("Indications: ");
-    fflush(stdin);
     scanf(" %[^\n]%*c", drug[top].indications);
-    fflush(stdin);
 
     printf("\n");
     updateFile();
-  } 
-  else
+  } else
     printf("Maximum stack size reached\n");
 }
 
 void loadAll() {
 
-  FILE *fpr, *ftop;
+  FILE *fpr, *ftop, *fprSup, *fprsTop;
   ftop = fopen("top.dat", "r");
   fpr = fopen("medinfo.dat", "r");
+  fprSup = fopen("SupplierInfo.dat", "r");
+  fprsTop = fopen("sTop.dat", "r");
   if (fpr == NULL || ftop == NULL) {
     fprintf(stderr, "Error while opening file!");
     exit(1);
   }
+  if (fprSup == NULL || fprsTop == NULL)
+    printf("Failed to open file in read mode!\n");
+  fscanf(fprsTop, "%d", &sTop);
+  for (int i = 0; i <= sTop; i++) {
+    fscanf(fprSup, SUP_DATA_FORMAT_IN, &sup[i].supID, sup[i].comName,
+           sup[i].salesMan, sup[i].phnNum, sup[i].email);
+  }
+  fclose(fprsTop);
+  fclose(fprSup);
+
   fscanf(ftop, "%d", &top);
   int i = 0;
-  int err = 0;
-  printf("loading data....\n");
+  int data = 0;
+  printf("\nloading data....\n");
   // delay(2000);
   printf("\ntop index is %d\n", top);
   while (i <= top) {
 
-    err += fscanf(fpr, MED_DATA_FORMAT_IN, &drug[i].MedID, drug[i].brandName,
-                  drug[i].genericName, drug[i].manufacturingCompany,
-                  drug[i].dosageForm, drug[i].strength, &drug[i].pricePerPack,
-                  &drug[i].pricePerUnit, &drug[i].inStock, drug[i].indications);
+    data +=
+        fscanf(fpr, MED_DATA_FORMAT_IN, &drug[i].MedID, drug[i].brandName,
+               drug[i].genericName, drug[i].manufacturingCompany,
+               drug[i].dosageForm, drug[i].strength, &drug[i].pricePerPack,
+               &drug[i].pricePerUnit, &drug[i].inStock, drug[i].indications);
     i++;
   }
-  printf("\n%d data loaded\n\n", err / 9);
+  printf("\n%d data loaded\n\n", data / 9);
   fclose(ftop);
   fclose(fpr);
+  orderInfoRead(); // issue here
 }
 
 void display() {
@@ -170,8 +203,7 @@ void display() {
     i++;
   }
   printf("\n");
-	goBack();
-
+  goBack();
 }
 
 int returnToMain() { return 0; }
@@ -186,7 +218,6 @@ mac:
   printf("\n                     SEARCH           \n");
   printf("_____________%s\n", UB);
   printf("Input the search key (case sensitive, 0 to return): ");
-  fflush(stdin);
   scanf(" %[^\n]%*c", key);
   printf("\n");
   if (strstr(key, back))
@@ -209,7 +240,7 @@ mac:
     printf("\na total of %d results found\n___________________________\n",
            count);
   }
-	goBack();
+  goBack();
 }
 
 void delData() {
@@ -270,54 +301,197 @@ RE:
   switch (option) {
   case 1:
     printf("Brand name: ");
-    fflush(stdin);
     scanf(" %[^\n]%*c", drug[i].brandName);
     break;
   case 2:
     printf("Generic name: ");
-    fflush(stdin);
     scanf("%[^\n]%*c", drug[i].genericName);
   case 3:
     printf("Manufacturing company: ");
-    fflush(stdin);
     scanf("%[^\n]%*c", drug[i].manufacturingCompany);
     break;
   case 4:
     printf("Dosage form: ");
-    fflush(stdin);
     scanf("%[^\n]%*c", drug[i].dosageForm);
     break;
   case 5:
     printf("Dose strength: ");
-    fflush(stdin);
     scanf("%[^\n]%*c", drug[i].strength);
     break;
   case 6:
     printf("Price/pack: ");
-    fflush(stdin);
     scanf("%lf", &drug[i].pricePerPack);
     break;
   case 7:
     printf("Price/unit: ");
-    fflush(stdin);
     scanf("%lf", &drug[i].pricePerUnit);
     break;
   case 8:
     printf("In stock: ");
-    fflush(stdin);
     scanf("%d", &drug[i].inStock);
     break;
   case 9:
     printf("Indications: ");
-    fflush(stdin);
     scanf(" %[^\n]%*c", drug[i].indications);
-    fflush(stdin);
     break;
   }
   updateFile();
 }
 
-// LOGIN & MENU PART 
+// SUPPLIER PART
+
+void addSupplier() {
+  sTop++;
+
+  sup[sTop].supID = sTop + 101;
+  printf("\nSuppiler ID: %d\n", sup[sTop].supID);
+  printf("Enter the company Name: ");
+  scanf(" %[^\n]%*c", sup[sTop].comName);
+  printf("Enter the dealer's Name: ");
+  scanf("%[^\n]%*c", sup[sTop].salesMan);
+  printf("Enter the phone Number: ");
+  scanf("%[^\n]%*c", sup[sTop].phnNum);
+  printf("Enter the email: ");
+  scanf("%[^\n]%*c", sup[sTop].email);
+  updatefileSup();
+  // loadAll();
+  printf("\nSuccesfully Updated!");
+  goBack();
+}
+
+void displaySupplier() {
+  for (int i = 0; i <= sTop; i++) {
+    printf("\nSuppiler ID: %d\n", sup[i].supID);
+    printf("Company Name: %s\n", sup[i].comName);
+    printf("Dealer's Name: %s\n", sup[i].salesMan);
+    printf("Phone Number: %s\n", sup[i].phnNum);
+    printf("Email: %s\n", sup[i].email);
+  }
+}
+
+void searchSupplier() {
+  char key[20];
+  int count = 0;
+  printf("\nSearch Company or Dealer (case sensitive): ");
+  scanf(" %[^\n]%*c", key);
+  // system("clear");
+  for (int i = 0; i <= sTop; i++) {
+    if (strstr(sup[i].comName, key) || strstr(sup[i].salesMan, key)) {
+      printf("\nSuppiler ID: %d\n", sup[i].supID);
+      printf("Company Name: %s\n", sup[i].comName);
+      printf("Dealer's Name : %s\n", sup[i].salesMan);
+      printf("Phone Number: %s\n", sup[i].phnNum);
+      printf("Email: %s\n", sup[i].email);
+      count++;
+    }
+  }
+  if (count < 1)
+    printf("\nSearch result not found.\n");
+
+  // goBack();
+}
+
+void delSupplier() {
+  int del;
+  // system("clear");
+  searchSupplier();
+  printf("\nEnter the supplier ID to remove: ");
+  scanf("%d", &del);
+  for (int i = 0; i <= sTop; i++) {
+    if (sup[i].supID == del) {
+      foundIndex = i;
+      break;
+    }
+  }
+  // if (foundIndex < 0) {
+  //   printf("Not in database.\n");
+  // } else {
+  foundIndex = del - 101;
+  if (foundIndex < 0) {
+    printf("\nNot in database.\n");
+  } else {
+    sTop--;
+    for (int i = foundIndex; i < sTop; i++) {
+      strcpy(sup[i].comName, sup[i + 1].comName);
+      strcpy(sup[i].salesMan, sup[i + 1].salesMan);
+      strcpy(sup[i].phnNum, sup[i + 1].phnNum);
+      strcpy(sup[i].email, sup[i + 1].email);
+    }
+    printf("\nSuccessfully removed!\n");
+  }
+  updatefileSup();
+}
+
+void editSupplier() {
+  int edit;
+  searchSupplier();
+  printf("\nEnter the supplier ID to edit: ");
+  scanf("%d", &edit);
+  for (int i = 0; i <= sTop; i++) {
+    if (sup[i].supID == edit) {
+      foundIndex = i;
+      break;
+    }
+  }
+  if (foundIndex < 0) {
+    printf("\nNot in database.\n");
+  }
+  //   foundIndex = edit - 101;
+  //   if (foundIndex < 0) {
+  //     printf("\nNot in database.\n");
+  //   }
+  // }
+  else {
+    int op;
+    system("clear");
+    printf("\n            You can replace\n");
+    printf("%s", UB);
+    printf("\n1. Company Name");
+    printf("\n2. Dealer's Name");
+    printf("\n3. Phone Number");
+    printf("\n4. Email\n");
+    printf("%s", UB);
+    printf("\nSelect an option: ");
+    scanf("%d", &op);
+    switch (op) {
+    case 1:
+      printf("\nNew company name: ");
+      scanf(" %[^\n]%*c", sup[foundIndex].comName);
+      break;
+    case 2:
+      printf("\nNew Dealer's name: ");
+      scanf(" %[^\n]%*c", sup[foundIndex].salesMan);
+      break;
+    case 3:
+      printf("\nNew Phone Number: ");
+      scanf(" %[^\n]%*c", sup[foundIndex].phnNum);
+      break;
+    case 4:
+      printf("\nNew Email: ");
+      scanf(" %[^\n]%*c", sup[foundIndex].email);
+      break;
+    }
+    printf("\nData updated!\n");
+    updatefileSup();
+  }
+}
+
+void updatefileSup() {
+  FILE *fpwSup, *fpwsTop;
+  fpwSup = fopen("SupplierInfo.dat", "w");
+  fpwsTop = fopen("sTop.dat", "w");
+  if (fpwSup == NULL || fpwsTop == NULL)
+    printf("Failed to open file in write mode!\n");
+  for (int i = 0; i <= sTop; i++) {
+    fprintf(fpwSup, SUP_DATA_FORMAT_OUT, sup[i].supID, sup[i].comName,
+            sup[i].salesMan, sup[i].phnNum, sup[i].email);
+  }
+  fprintf(fpwsTop, "%d", sTop);
+  fclose(fpwsTop);
+  fclose(fpwSup);
+}
+
+// LOGIN & MENU PART
 
 void menu() {
   int op;
@@ -326,17 +500,18 @@ void menu() {
     printf("               MAIN MENU           \n");
     printf("%s", UB);
     printf("%s", UB);
-    printf("\n        Enter an option <1 to 3> \n");
+    printf("\n        Enter an option <1 to 4> \n");
     printf("%s", UB);
     printf("\n");
     printf("\n");
     printf("               1. Search             \n");
     printf("               2. Browse             \n");
-    printf("               3. Contact us             \n");
+    printf("               3. Order here             \n");
+    printf("               4. Contact us             \n");
     printf("\n");
     printf("%s", UB);
     printf("\n");
-    printf("         Press < 4 > To Sign-in \n");
+    printf("         Press < 5 > To Sign-in \n");
     printf("%s\n", UB);
     printf("Select an option: ");
 
@@ -351,9 +526,13 @@ void menu() {
       break;
     case 3:
       system("clear");
-      contactInfo();
+      display();
       break;
     case 4:
+      system("clear");
+      contactInfo();
+      break;
+    case 5:
       system("clear");
     RETRY:
       printf("\n                 SIGN IN\n");
@@ -378,10 +557,54 @@ void menu() {
   }
 }
 
+void supplierPanel() {
+  while (1) {
+    system("clear");
+    printf("\n                SUPPLIER\n");
+    printf("%s\n", UB);
+    printf("              Your options\n");
+    printf("%s", UB);
+    printf("\n1. Add");
+    printf("\n2. Remove");
+    printf("\n3. Edit");
+    printf("\n4. Browse");
+    printf("\n5. Search\n");
+    printf("%s\n", UB);
+    printf("%s\n", UB);
+    printf("Select an option: ");
+
+    int op;
+    scanf("%d", &op);
+    switch (op) {
+    case 1:
+      system("clear");
+      addSupplier();
+      break;
+    case 2:
+      delSupplier();
+      goBack();
+      break;
+      break;
+    case 3:
+      editSupplier();
+      goBack();
+      break;
+    case 4:
+      system("clear");
+      displaySupplier();
+      goBack();
+      break;
+    case 5:
+      searchSupplier();
+      goBack();
+      break;
+    }
+  }
+}
+
 void AdminPanel() {
   int choice;
   while (choice != 0) {
-    system("clear");
     printf("\n");
     printf("                  ADMIN\n");
     printf("%s\n", UB);
@@ -401,12 +624,12 @@ void AdminPanel() {
     printf("Select an option: ");
     // printf("%s", R);
     // printf("%s", TB);
-    fflush(stdin);
     scanf("%d", &choice);
 
     switch (choice) {
     case 1:
       addNew();
+      system("clear");
       break;
     case 2:
       delData();
@@ -415,7 +638,7 @@ void AdminPanel() {
       editData();
       break;
     case 4:
-      display();  //browse all files
+      display(); // browse all files
       break;
     case 5:
       search();
@@ -424,7 +647,7 @@ void AdminPanel() {
 
       break;
     case 7:
-
+      supplierPanel();
       break;
     case 0:
       printf("Logging out......\n");
@@ -449,14 +672,15 @@ void loginInfoWrite() {
   scanf("%s", user.password);
   FILE *fpwlogin;
   fpwlogin = fopen("loginInfo.dat", "w");
+  if (fpwlogin == NULL)
+    printf("Failed to open file in write mode!\n");
   fprintf(fpwlogin, "%s %s", user.userName, user.password);
   fclose(fpwlogin);
 }
 
 void loginInfoRead() {
   char userName[20], password[20];
-  int t = 2;
-  wrongPass:
+wrongPass:
   system("clear");
   printf("\n                LOGIN\n");
   printf("%s\n", UB);
@@ -473,23 +697,20 @@ void loginInfoRead() {
     system("clear");
     // printf("Login Successful!\n");
     AdminPanel();
-  } 
-  else {
+  } else {
     printf("\nWrong Login Info!\n\n");
     int op;
     printf("Press < 1 > to try again.\n");
     printf("Press < 2 > to go back.\n");
-    RETRY:
+  RETRY:
     scanf("%d", &op);
-    if(op==1){
+    if (op == 1) {
       goto wrongPass;
-    }
-    else if(op==2){
+    } else if (op == 2) {
       menu();
-    }
-    else
+    } else
       printf("\nOption does not exist! Try again!\n\n");
-      goto RETRY;    
+    goto RETRY;
   }
 }
 
@@ -505,17 +726,204 @@ void contactInfo() {
   goBack();
 }
 
-void goBack(){
+void goBack() {
   char op;
   printf("\n\nPress any key to go back...\n");
   scanf(" %c", &op);
 }
 
+// ORDER PART
+
+typedef struct orderInfo {
+  int orderId;
+  char firstName[20];
+  char lastName[20];
+  char area[20];
+  char city[20];
+  char contactNum[20];
+  int totalItem;
+  char medName[20][50];
+  int qty[20];
+  char status[20];
+} orderInfo;
+
+orderInfo order[100];
+
+int oTop = -1;
+
+const char *ORDER_INFO_OUT_START =
+    "{\"First Name\": \"%s\", \"Last Name\": \"%s\", "
+    "\"Area\": \"%s\", \"City\": \"%s\", \"Contact Number\": \"%s\", \"Total "
+    "Item\": %d, \"Status\": \"%s\",";
+const char *ORDER_INFO_OUT_MID =
+    " \"Med\": \"%s\", \"qt\": %d,"; // med name and qty
+const char *ORDER_INFO_OUT_END = " \"OrderID\": %d}\n";
+
+const char *ORDER_INFO_IN_START =
+    "{\"First Name\": \"%[^\"]\", \"Last Name\": \"%[^\"]\", "
+    "\"Area\": \"%[^\"]\", \"City\": \"%[^\"]\", \"Contact Number\": "
+    "\"%[^\"]\", \"Total Item\": %d, \"Status\": \"%[^\"]\",";
+const char *ORDER_INFO_IN_MID =
+    " \"Med\": \"%[^\"]\", \"qt\": %d,"; // med name and qty
+const char *ORDER_INFO_IN_END = " \"OrderID\": %d}\n";
+
+/*void editOrder(){
+
+}*/
+
+void displayOrder() {
+  printf("%d\n", oTop);
+  for (int i = 0; i <= oTop; i++) {
+    printf("%s\n%s\n%s\n%s\n%s\n%d\n%s\n", order[i].firstName,
+           order[i].lastName, order[i].area, order[i].city, order[i].contactNum,
+           order[i].totalItem, order[i].status);
+    for (int j = 0; j < order[i].totalItem; j++) {
+      printf("%s\t%d\n", order[i].medName[j], order[i].qty[j]);
+    }
+    printf("%d\n", order[i].orderId);
+  }
+}
+
+void orderInfoWrite() {
+  FILE *fpworder, *fpwotop;
+  fpworder = fopen("orderInfo.dat", "w");
+  fpwotop = fopen("oTop.dat", "w");
+  if (fpworder == NULL || fpwotop == NULL) {
+    printf("Failed to open file in write mode!\n");
+    exit(0);
+  }
+  fprintf(fpwotop, "%d", oTop);
+  for (int i = 0; i <= oTop; i++) {
+    fprintf(fpworder, ORDER_INFO_OUT_START, order[i].firstName,
+            order[i].lastName, order[i].area, order[i].city,
+            order[i].contactNum, order[i].totalItem, order[i].status);
+    for (int j = 0; j < order[i].totalItem; j++) {
+      fprintf(fpworder, ORDER_INFO_OUT_MID, order[i].medName[j],
+              order[i].qty[j]);
+    }
+    fprintf(fpworder, ORDER_INFO_OUT_END, order[i].orderId);
+  }
+  fclose(fpworder);
+  fclose(fpwotop);
+}
+
+void orderInfoRead() {
+  FILE *fprorder, *fprotop;
+  char str[10];
+  fprorder = fopen("orderInfo.dat", "r");
+  fprotop = fopen("oTop.dat", "r");
+  if (fprorder == NULL || fprotop == NULL) {
+    printf("Failed to open file in read mode!\n");
+    exit(0);
+  }
+  fscanf(fprotop, "%d", &oTop);
+  for (int i = 0; i <= oTop; i++) {
+    fscanf(fprorder, ORDER_INFO_IN_START, &order[i].orderId, order[i].firstName,
+           order[i].lastName, order[i].area, order[i].city, order[i].contactNum,
+           order[i].totalItem, order[i].status);
+    for (int j = 0; j < order[i].totalItem; j++) {
+      fscanf(fprorder, ORDER_INFO_IN_MID, order[i].medName[j], order[i].qty[j]);
+    }
+    fscanf(fprorder, ORDER_INFO_IN_END, order[i].orderId);
+  }
+  fclose(fprorder);
+  fclose(fprotop);
+}
+
+void testOrder() {
+  oTop++;
+  order[oTop].orderId = oTop + 101;
+  strcpy(order[oTop].firstName, "Tamanna");
+  strcpy(order[oTop].lastName, "Khatun");
+  strcpy(order[oTop].area, "Savar");
+  strcpy(order[oTop].city, "Dhaka");
+  strcpy(order[oTop].contactNum, "0123456789");
+  order[oTop].totalItem = 2;
+  strcpy(order[oTop].status, "incomplete");
+  for (int i = 0; i < order[oTop].totalItem; i++) {
+    scanf("%s", order[oTop].medName[i]);
+    scanf("%d", &order[oTop].qty[i]);
+  }
+  orderInfoWrite();
+}
+
+// RECIEPT PART
+
+typedef struct receipt {
+  int RID;
+  char cName[30];
+  char cPhone[20];
+  int items;
+  char rDate[30];
+  char rTime[20];
+  char meds[30][50];
+  double unitPrice[30];
+  int units[30];
+  double totalPrice;
+} receipt;
+receipt rec[10];
+int rTop = -1;
+void addReceipt() {
+  int i = 0, med_id;
+  rTop++;
+  printf("Customer: ");
+  scanf("%[^\n]%*c", rec[rTop].cName);
+  printf("Phone: ");
+  scanf("%[^\n]%*c", rec[rTop].cPhone);
+  time_t currentTime;
+  time(&currentTime);
+  strcpy(rec[rTop].rDate, ctime(&currentTime));
+  printf("Number of items: ");
+  scanf("%d", &rec[rTop].items);
+  while (i < rec[rTop].items) {
+    printf("Item %d(MedID): ", i + 1);
+    scanf("%d", &med_id);
+    strcpy(rec[rTop].meds[i], drug[med_id - 101].brandName);
+    rec[rTop].unitPrice[i] = drug[med_id - 101].pricePerUnit;
+    printf("Units: ");
+    scanf("%d", &rec[rTop].units[i]);
+    rec[rTop].totalPrice += (rec[rTop].unitPrice[i] * rec[rTop].units[i]);
+    i++;
+  }
+}
+void displayReceipt() {
+  system("clear");
+  for (int i = 0; i <= rTop; i++) {
+    printf("Date/Time: %s\n", rec[i].rDate);
+    printf("Customer: %s\n", rec[i].cName);
+    printf("Phone: %s\n", rec[i].cPhone);
+    printf("\n___________________________________________\n");
+    printf("item\t\t\tamount\t\t\tunit price\n");
+    printf("\n___________________________________________\n");
+    for (int j = 0; j < rec[i].items; j++) {
+      printf("%s", rec[i].meds[j]);
+      printf("\t\t\t\t%.2d", rec[i].units[j]);
+      printf("\t\t\t\t%.2lf\n", rec[i].unitPrice[j]);
+    }
+    printf("\n___________________________________________\n");
+    printf("\n\t\t\t\t\t\tTotal: %.2lf\n", rec[i].totalPrice);
+  }
+}
+// void test() {
+//   sTop++;
+//   sup[sTop].supID = sTop + 101;
+//   // sup[sTop].comName = "Beximco Pharma";
+//   strcpy(sup[sTop].comName, "Beximco pharma");
+//   strcpy(sup[sTop].salesMan, "orthee j.");
+//   strcpy(sup[sTop].phnNum, "012312312");
+//   strcpy(sup[sTop].email, "orth@gmail.com");
+//   updatefileSup();
+// }
 int main() {
-  
-  loadAll();
+   loadAll();
+
+ // orderInfoRead();
+   //displayOrder();
+  // system("clear");
+  // AdminPanel();
+  //testOrder();
+  // orderInfoWrite();
   menu();
-  loginInfoRead();
 
   return 0;
 }
