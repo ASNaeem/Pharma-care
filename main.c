@@ -1,20 +1,22 @@
 #include <ctype.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#define MAX 100
 
 void menu();
 void updateFile();
 void addNew();
 void loadAll();
 void display();
-void search();
+int search(int Bool);
 void delData();
 void editData();
 void addSupplier();
 void displaySupplier();
-void searchSupplier();
+int searchSupplier(int Bool);
 void delSupplier();
 void editSupplier();
 void updatefileSup();
@@ -24,16 +26,27 @@ void loginInfoWrite();
 void loginInfoRead();
 void orderInfoWrite();
 void orderInfoRead();
+void addOrder();
 void displayOrder();
+void currentDate();
+void currentTime();
+void displayReceipt();
+void loadReceipts();
+void updateReceipts();
+void addReceipt(int Bool);
 void contactInfo();
 void goBack();
+void sales();
+void Orders();
+void Receipts();
+void techTeam();
 
-
+const char *RB =
+    "_____________________________________________________________\n";
 const char *UB = "_________________________________________\n";
 const char *L = {"|"};
 const char *R = {"|\n"};
 
-#define MAX 100
 const char *MED_DATA_FORMAT_IN =
     "{\"MedID\": %d, \"Brand name\": \"%[^\"]\", \"Generic name\": \"%[^\"]\", "
     "\"Manufacturer\": \"%[^\"]\", \"Dosage form\": \"%[^\"]\", \"Strength\": "
@@ -65,7 +78,7 @@ typedef struct supplier {
   char email[50];
 } supplier;
 
-supplier sup[100];
+supplier sup[MAX];
 int sTop = -1;
 int foundIndex = -1;
 
@@ -81,12 +94,30 @@ typedef struct med {
   double pricePerUnit;
   int inStock;
   char indications[1000];
-
 } med;
-
 med drug[MAX];
-
 int top = -1;
+
+typedef struct receipt {
+  int RID;
+  char cName[30];
+  char cPhone[20];
+  char rDate[40];
+  int hour;
+  int min;
+  char AMPM[30];
+  int items;
+  char meds[30][50];
+  int units[30];
+  double unitPrice[30];
+  double totalPrice;
+} receipt;
+
+receipt rec[MAX];
+int rTop = -1;
+double Total_Sales = 0;
+double Profit;
+
 // void delay(int seconds) {
 //   int mseconds = 1000 * seconds;
 //   clock_t startTime = clock();
@@ -116,11 +147,13 @@ void updateFile() {
     printf("\nData updated!\n");
   fclose(fptop);
   fclose(fpwrite);
+  system("clear");
 }
 
 void addNew() {
   if (top <= MAX) {
     top++;
+    system("clear");
     printf("MedID: %d\n", top + 101);
     drug[top].MedID = top + 101;
     printf("Brand name: ");
@@ -131,13 +164,23 @@ void addNew() {
     scanf("%[^\n]%*c", drug[top].manufacturingCompany);
     printf("Dosage form: ");
     scanf("%[^\n]%*c", drug[top].dosageForm);
+
     printf("Dose strength: ");
     scanf("%[^\n]%*c", drug[top].strength);
 
+    if (strcmp("syrup", drug[top].dosageForm)) {
+      printf("Pack Size: ");
+      scanf("%d", &drug[top].packSize);
+    } else {
+      drug[top].packSize = 1;
+      printf("Pack Size: %d\n", drug[top].packSize);
+    }
     printf("Price/pack: ");
     scanf("%lf", &drug[top].pricePerPack);
-    printf("Price/unit: ");
-    scanf("%lf", &drug[top].pricePerUnit);
+
+    drug[top].pricePerUnit = (drug[top].pricePerPack) / (drug[top].packSize);
+
+    printf("Price/unit: %.2lf\n", drug[top].pricePerUnit);
 
     printf("In stock(unit): ");
     scanf("%d", &drug[top].inStock);
@@ -190,7 +233,8 @@ void loadAll() {
   printf("\n%d data loaded\n\n", data / 9);
   fclose(ftop);
   fclose(fpr);
-  orderInfoRead(); // issue here
+  orderInfoRead();
+  loadReceipts();
 }
 
 void display() {
@@ -203,33 +247,35 @@ void display() {
     i++;
   }
   printf("\n");
-  goBack();
 }
 
-int returnToMain() { return 0; }
-
-void search() {
+int returnToMain() {
   system("clear");
-  char key[100];
+  return 0;
+}
+
+int search(int Bool) {
+  system("clear");
+  char key[10];
   char const *back = "0";
   int count;
 mac:
   count = 0;
-  printf("\n                     SEARCH           \n");
-  printf("_____________%s\n", UB);
-  printf("Input the search key (case sensitive, 0 to return): ");
+  printf("\n             SEARCH           \n");
+  printf("%s\n", UB);
+  printf("Input the search key (case sensitive): ");
   scanf(" %[^\n]%*c", key);
   printf("\n");
-  if (strstr(key, back))
-    returnToMain();
-  else if (strlen(key) < 3) {
+  // if (strstr(key, back))
+  //   returnToMain();
+  if (strlen(key) < 3) {
     printf("\nPlease input at least 3 characters!\n");
     goto mac;
   } else {
     for (int i = 0; i <= top; i++) {
       if (strstr(drug[i].brandName, key) || strstr(drug[i].genericName, key) ||
           strstr(drug[i].manufacturingCompany, key) ||
-          strstr(drug[i].indications, key)) {
+          strstr(drug[i].dosageForm, key) || strstr(drug[i].indications, key)) {
         printf(MED_DATA_FORMAT_CONSOLE, drug[i].MedID, drug[i].brandName,
                drug[i].genericName, drug[i].manufacturingCompany,
                drug[i].dosageForm, drug[i].strength, drug[i].pricePerPack,
@@ -237,105 +283,132 @@ mac:
         count++;
       }
     }
-    printf("\na total of %d results found\n___________________________\n",
+    printf("\na total of %d result(s) found\n___________________________\n",
            count);
   }
-  goBack();
+  if (Bool)
+    goBack();
+  else
+    return count;
 }
 
 void delData() {
-  int id = 1, i, j;
-REDEL:
-  search();
+  int id = 1, i, j, res;
+
+  res = search(0);
+  if (res == 0) {
+    printf("\n***Showing all available data***\n\n");
+    display();
+  }
+REID:
   printf("Input the MedID to delete(0 to return): ");
   scanf("%d", &id);
   if (id == 0)
-    goto REDEL;
-  for (i = 0; i <= top; i++) {
-    if (drug[i].MedID == id) {
-      break;
+    returnToMain();
+  else if (id < 101 || id > drug[top].MedID) {
+    system("clear");
+    printf("\n**Wrong ID, Try Again!!**\n\n");
+    goto REID;
+  }
+
+  else {
+    for (i = 0; i <= top; i++)
+      if (drug[i].MedID == id) {
+        id = i;
+        break;
+      }
+
+    for (j = i; j < top; j++) {
+      strcpy(drug[j].brandName, drug[j + 1].brandName);
+      strcpy(drug[j].genericName, drug[j + 1].genericName);
+      strcpy(drug[j].manufacturingCompany, drug[j + 1].manufacturingCompany);
+      strcpy(drug[j].dosageForm, drug[j + 1].dosageForm);
+      strcpy(drug[j].strength, drug[j + 1].strength);
+      drug[j].pricePerPack = drug[j + 1].pricePerPack;
+      drug[j].pricePerUnit = drug[j + 1].pricePerUnit;
+      drug[j].inStock = drug[j + 1].inStock;
+      strcpy(drug[j].indications, drug[j + 1].indications);
     }
+    top--;
+    updateFile();
   }
-  for (j = i; j < top; j++) {
-    drug[j].MedID = drug[j + 1].MedID;
-    strcpy(drug[j].brandName, drug[j + 1].brandName);
-    strcpy(drug[j].genericName, drug[j + 1].genericName);
-    strcpy(drug[j].manufacturingCompany, drug[j + 1].manufacturingCompany);
-    strcpy(drug[j].dosageForm, drug[j + 1].dosageForm);
-    strcpy(drug[j].strength, drug[j + 1].strength);
-    drug[j].pricePerPack = drug[j + 1].pricePerPack;
-    drug[j].pricePerUnit = drug[j + 1].pricePerUnit;
-    drug[j].inStock = drug[j + 1].inStock;
-    strcpy(drug[j].indications, drug[j + 1].indications);
-  }
-  top--;
-  updateFile();
 }
 
 void editData() {
-  int id = 1, i, option;
-  search();
-RE:
-  printf("Input the MedID to edit(0 to return): ");
+  int id = -1, res, option;
+  res = search(0);
+
+  if (res == 0) {
+    printf("\n***Showing all available data***\n\n");
+    display();
+  }
+DE:
+  printf("\nInput the MedID to edit(0 to return): ");
   scanf("%d", &id);
   if (id == 0)
     returnToMain();
-  for (i = 0; i <= top; i++) {
-    if (drug[i].MedID == id) {
-      break;
+  else if (id < 101 || id > drug[top].MedID) {
+    printf("\n**Wrong ID, Try Again!**\n\n");
+    goto DE;
+  } else {
+    while (1) {
+      system("clear");
+      printf("Which data would you like to edit?\n");
+      printf("1.Brand name\n");
+      printf("2.Generic name\n");
+      printf("3.Manufacturering company\n");
+      printf("4.Dosage form\n");
+      printf("5.Strength\n");
+      printf("6.Price/Pack\n");
+      printf("7.In stock\n");
+      printf("8.Indications\n");
+      // printf("10.All\n");
+      printf("0.Return\n");
+      scanf("%d", &option);
+      switch (option) {
+      case 1:
+        printf("Brand name: ");
+        scanf(" %[^\n]%*c", drug[id - 101].brandName);
+        break;
+      case 2:
+        printf("Generic name: ");
+        scanf(" %[^\n]%*c", drug[id - 101].genericName);
+        break;
+      case 3:
+        printf("Manufacturing company: ");
+        scanf(" %[^\n]%*c", drug[id - 101].manufacturingCompany);
+        break;
+      case 4:
+        printf("Dosage form: ");
+        scanf(" %[^\n]%*c", drug[id - 101].dosageForm);
+        break;
+      case 5:
+        printf("Dose strength: ");
+        scanf(" %[^\n]%*c", drug[id - 101].strength);
+        break;
+      case 6:
+        printf("Price/pack: ");
+        scanf("%lf", &drug[id - 101].pricePerPack);
+        break;
+      case 7:
+        printf("In stock: ");
+        scanf("%d", &drug[id - 101].inStock);
+        break;
+      case 8:
+        printf("Indications: ");
+        scanf(" %[^\n]%*c", drug[id - 101].indications);
+        break;
+      case 0:
+        break;
+      default:
+        printf("Wrong Input!");
+        break;
+      }
+      updateFile();
+      if (option == 0)
+        break;
     }
   }
-  printf("Which data would you like to edit?\n");
-  printf("1.Brand name\n");
-  printf("2.Generic name\n");
-  printf("3.Manufacturering company\n");
-  printf("4.Dosage form\n");
-  printf("5.Strength\n");
-  printf("6.Price/Pack\n");
-  printf("7.Price/Unit\n");
-  printf("8.In stock\n");
-  printf("9.Indications\n");
-  printf("10.All\n");
-  printf("0.Return\n");
-  scanf("%d", &option);
-  switch (option) {
-  case 1:
-    printf("Brand name: ");
-    scanf(" %[^\n]%*c", drug[i].brandName);
-    break;
-  case 2:
-    printf("Generic name: ");
-    scanf("%[^\n]%*c", drug[i].genericName);
-  case 3:
-    printf("Manufacturing company: ");
-    scanf("%[^\n]%*c", drug[i].manufacturingCompany);
-    break;
-  case 4:
-    printf("Dosage form: ");
-    scanf("%[^\n]%*c", drug[i].dosageForm);
-    break;
-  case 5:
-    printf("Dose strength: ");
-    scanf("%[^\n]%*c", drug[i].strength);
-    break;
-  case 6:
-    printf("Price/pack: ");
-    scanf("%lf", &drug[i].pricePerPack);
-    break;
-  case 7:
-    printf("Price/unit: ");
-    scanf("%lf", &drug[i].pricePerUnit);
-    break;
-  case 8:
-    printf("In stock: ");
-    scanf("%d", &drug[i].inStock);
-    break;
-  case 9:
-    printf("Indications: ");
-    scanf(" %[^\n]%*c", drug[i].indications);
-    break;
-  }
-  updateFile();
 }
 
 // SUPPLIER PART
@@ -355,7 +428,7 @@ void addSupplier() {
   scanf("%[^\n]%*c", sup[sTop].email);
   updatefileSup();
   // loadAll();
-  printf("\nSuccesfully Updated!");
+  printf("\nSuccesfully Updated!\n");
   goBack();
 }
 
@@ -369,7 +442,7 @@ void displaySupplier() {
   }
 }
 
-void searchSupplier() {
+int searchSupplier(int Bool) {
   char key[20];
   int count = 0;
   printf("\nSearch Company or Dealer (case sensitive): ");
@@ -388,13 +461,20 @@ void searchSupplier() {
   if (count < 1)
     printf("\nSearch result not found.\n");
 
-  // goBack();
+  if (Bool)
+    goBack();
+  else
+    return count;
 }
 
 void delSupplier() {
   int del;
-  // system("clear");
-  searchSupplier();
+  foundIndex = -1;
+  int res = searchSupplier(0);
+  if (res == 0) {
+    printf("\n***Showing all available data***\n");
+    displaySupplier();
+  }
   printf("\nEnter the supplier ID to remove: ");
   scanf("%d", &del);
   for (int i = 0; i <= sTop; i++) {
@@ -403,28 +483,30 @@ void delSupplier() {
       break;
     }
   }
-  // if (foundIndex < 0) {
-  //   printf("Not in database.\n");
-  // } else {
-  foundIndex = del - 101;
   if (foundIndex < 0) {
     printf("\nNot in database.\n");
   } else {
-    sTop--;
     for (int i = foundIndex; i < sTop; i++) {
       strcpy(sup[i].comName, sup[i + 1].comName);
       strcpy(sup[i].salesMan, sup[i + 1].salesMan);
       strcpy(sup[i].phnNum, sup[i + 1].phnNum);
       strcpy(sup[i].email, sup[i + 1].email);
     }
+    sTop--;
+    system("clear");
     printf("\nSuccessfully removed!\n");
+    updatefileSup();
   }
-  updatefileSup();
 }
 
 void editSupplier() {
+  foundIndex = -1;
   int edit;
-  searchSupplier();
+  int res = searchSupplier(0);
+  if (res == 0) {
+    printf("\n***Showing all available data***\n");
+    displaySupplier();
+  }
   printf("\nEnter the supplier ID to edit: ");
   scanf("%d", &edit);
   for (int i = 0; i <= sTop; i++) {
@@ -436,20 +518,17 @@ void editSupplier() {
   if (foundIndex < 0) {
     printf("\nNot in database.\n");
   }
-  //   foundIndex = edit - 101;
-  //   if (foundIndex < 0) {
-  //     printf("\nNot in database.\n");
-  //   }
-  // }
   else {
     int op;
+  WI:
     system("clear");
     printf("\n            You can replace\n");
     printf("%s", UB);
     printf("\n1. Company Name");
     printf("\n2. Dealer's Name");
     printf("\n3. Phone Number");
-    printf("\n4. Email\n");
+    printf("\n4. Email");
+    printf("\n0. Return\n");
     printf("%s", UB);
     printf("\nSelect an option: ");
     scanf("%d", &op);
@@ -469,6 +548,13 @@ void editSupplier() {
     case 4:
       printf("\nNew Email: ");
       scanf(" %[^\n]%*c", sup[foundIndex].email);
+      break;
+    case 0:
+      supplierPanel();
+      break;
+    default:
+      printf("\nWrong Input!\n");
+      goto WI;
       break;
     }
     printf("\nData updated!\n");
@@ -494,9 +580,11 @@ void updatefileSup() {
 // LOGIN & MENU PART
 
 void menu() {
-  int op;
+
   while (1) {
+    int op;
     system("clear");
+    printf("\n");
     printf("               MAIN MENU           \n");
     printf("%s", UB);
     printf("%s", UB);
@@ -504,54 +592,66 @@ void menu() {
     printf("%s", UB);
     printf("\n");
     printf("\n");
-    printf("               1. Search             \n");
-    printf("               2. Browse             \n");
-    printf("               3. Order here             \n");
-    printf("               4. Contact us             \n");
+    printf("               1. Search\n");
+    printf("               2. Browse\n");
+    printf("               3. Order now\n");
+    printf("               4. Contact us\n");
+    printf("               0. Exit\n");
     printf("\n");
     printf("%s", UB);
     printf("\n");
     printf("         Press < 5 > To Sign-in \n");
     printf("%s\n", UB);
     printf("Select an option: ");
-
     scanf("%d", &op);
     switch (op) {
     case 1:
-      search();
+      search(1);
       break;
     case 2:
       system("clear");
       display();
+      goBack();
       break;
     case 3:
       system("clear");
-      display();
+      addOrder();
       break;
     case 4:
       system("clear");
       contactInfo();
+      goBack();
       break;
     case 5:
-      system("clear");
-    RETRY:
-      printf("\n                 SIGN IN\n");
-      printf("%s", UB);
-      printf("\n           1. Login");
-      printf("\n           2. Reset Password\n");
-      printf("%s\n", UB);
-      printf("Select an option: ");
-      scanf("%d", &op);
-      system("clear");
-      if (op == 1) {
-        loginInfoRead();
-      } else if (op == 2)
-        loginInfoWrite();
-      else {
+      while (1) {
+        int o;
         system("clear");
-        printf("\nOption does not exist! Try again!\n");
-        goto RETRY;
+
+        printf("\n                 SIGN IN\n");
+        printf("%s", UB);
+        printf("\n           1. Login");
+        printf("\n           2. Reset Password");
+        printf("\n           0. Return\n");
+        printf("%s\n", UB);
+        printf("Select an option: ");
+        scanf(" %d", &o);
+        system("clear");
+        if (o == 1) {
+          loginInfoRead();
+        } else if (o == 2)
+          loginInfoWrite();
+        else if (o == 0) {
+          break;
+        }
       }
+      break;
+    case 0:
+      system("clear");
+      printf("\n\n        !! THANK YOU FOR USING OUR SERVICE !!\n\n");
+      exit(0);
+      break;
+    default:
+      printf("Wrong input!\n");
       break;
     }
   }
@@ -568,7 +668,8 @@ void supplierPanel() {
     printf("\n2. Remove");
     printf("\n3. Edit");
     printf("\n4. Browse");
-    printf("\n5. Search\n");
+    printf("\n5. Search");
+    printf("\n0. Return\n");
     printf("%s\n", UB);
     printf("%s\n", UB);
     printf("Select an option: ");
@@ -584,7 +685,6 @@ void supplierPanel() {
       delSupplier();
       goBack();
       break;
-      break;
     case 3:
       editSupplier();
       goBack();
@@ -595,8 +695,13 @@ void supplierPanel() {
       goBack();
       break;
     case 5:
-      searchSupplier();
-      goBack();
+      searchSupplier(1);
+      break;
+    case 0:
+      AdminPanel();
+      break;
+    default:
+      printf("Wrong Input!");
       break;
     }
   }
@@ -605,6 +710,7 @@ void supplierPanel() {
 void AdminPanel() {
   int choice;
   while (choice != 0) {
+    system("clear");
     printf("\n");
     printf("                  ADMIN\n");
     printf("%s\n", UB);
@@ -616,7 +722,8 @@ void AdminPanel() {
     printf("\n4. Browse    ");
     printf("\n5. Search 	      ");
     printf("\n6. Sales");
-    printf("\n7. Supplier\n");
+    printf("\n7. Supplier");
+    printf("\n8. Tech-Support\n");
     printf("%s", UB);
     printf("\n            Press <0> To Logout\n");
     printf("%s\n", UB);
@@ -638,16 +745,21 @@ void AdminPanel() {
       editData();
       break;
     case 4:
-      display(); // browse all files
+      system("clear");
+      display(); // browse all data
+      goBack();
       break;
     case 5:
-      search();
+      search(1);
       break;
     case 6:
-
+      sales();
       break;
     case 7:
       supplierPanel();
+      break;
+    case 8:
+      techTeam();
       break;
     case 0:
       printf("Logging out......\n");
@@ -679,7 +791,8 @@ void loginInfoWrite() {
 }
 
 void loginInfoRead() {
-  char userName[20], password[20];
+  char c, userName[20], password[20];
+  int i;
 wrongPass:
   system("clear");
   printf("\n                LOGIN\n");
@@ -687,6 +800,13 @@ wrongPass:
   printf("Username: ");
   scanf("%s", userName);
   printf("Password: ");
+  i = 0;
+  // while ((c = _getch()) != 13) { //password masking
+  //   password[i] = c;
+  // printf("*");
+  //   i++;
+  // }
+  // password[i] = '\0';
   scanf("%s", password);
   FILE *fprlogin;
   fprlogin = fopen("loginInfo.dat", "r");
@@ -712,6 +832,26 @@ wrongPass:
       printf("\nOption does not exist! Try again!\n\n");
     goto RETRY;
   }
+  fclose(fprlogin);
+}
+
+void techTeam() {
+  system("clear");
+  printf("\n                     TECH-TEAM           \n");
+  printf("_____________%s", UB);
+  printf("_____________%s\n", UB);
+  printf("Abu Saleh Mohammad Naeem\n");
+  printf("Phone number: 01**-*******\n");
+  printf("Email: saleh.naeem.cse@ulab.edu.bd\n\n");
+  printf("Urbana Jaman Orthee\n");
+  printf("Phone number: 01**-*******\n");
+  printf("Email: urbana.jaman.cse@ulab.edu.bd\n\n");
+  printf("Tamanna Khatun\n");
+  printf("Phone number: 01**-*******\n");
+  printf("Email: tamanna.khatun.cse@ulab.edu.bd\n");
+  printf("_____________%s", UB);
+  printf("_____________%s\n", UB);
+  goBack();
 }
 
 void contactInfo() {
@@ -723,65 +863,54 @@ void contactInfo() {
   printf("Phone number: 01**-*******\n\n");
   printf("Email: pharma-care@gmail.com\n\n");
   printf("_____________%s", UB);
-  goBack();
 }
 
 void goBack() {
   char op;
-  printf("\n\nPress any key to go back...\n");
+  printf("\nEnter any key to return..\n");
   scanf(" %c", &op);
+  system("clear");
 }
 
-// ORDER PART
+// ORDER PART - incomplete
 
 typedef struct orderInfo {
   int orderId;
-  char firstName[20];
-  char lastName[20];
-  char area[20];
-  char city[20];
+  int receiptId;
+  char name[50];
+  char address[50];
   char contactNum[20];
-  int totalItem;
-  char medName[20][50];
-  int qty[20];
   char status[20];
 } orderInfo;
 
-orderInfo order[100];
+orderInfo order[MAX];
 
 int oTop = -1;
 
-const char *ORDER_INFO_OUT_START =
-    "{\"First Name\": \"%s\", \"Last Name\": \"%s\", "
-    "\"Area\": \"%s\", \"City\": \"%s\", \"Contact Number\": \"%s\", \"Total "
-    "Item\": %d, \"Status\": \"%s\",";
-const char *ORDER_INFO_OUT_MID =
-    " \"Med\": \"%s\", \"qt\": %d,"; // med name and qty
-const char *ORDER_INFO_OUT_END = " \"OrderID\": %d}\n";
+const char *ORDER_INFO_OUT =
+    "{\"Order ID\": %d, \"Receipt ID\": %d, \"Name\": \"%s\", \"Address\": "
+    "\"%s\", \"Contact Number\": \"%s\"}\n";
 
-const char *ORDER_INFO_IN_START =
-    "{\"First Name\": \"%[^\"]\", \"Last Name\": \"%[^\"]\", "
-    "\"Area\": \"%[^\"]\", \"City\": \"%[^\"]\", \"Contact Number\": "
-    "\"%[^\"]\", \"Total Item\": %d, \"Status\": \"%[^\"]\",";
-const char *ORDER_INFO_IN_MID =
-    " \"Med\": \"%[^\"]\", \"qt\": %d,"; // med name and qty
-const char *ORDER_INFO_IN_END = " \"OrderID\": %d}\n";
+const char *ORDER_INFO_IN = "{\"Order ID\": %d, \"Receipt ID\": %d, \"Name\": "
+                            "\"%[^\"]\", \"Address\": \"%[^\"]\", "
+                            "\"Contact Number\": \"%[^\"]\"}\n";
 
-/*void editOrder(){
-
-}*/
-
-void displayOrder() {
-  printf("%d\n", oTop);
-  for (int i = 0; i <= oTop; i++) {
-    printf("%s\n%s\n%s\n%s\n%s\n%d\n%s\n", order[i].firstName,
-           order[i].lastName, order[i].area, order[i].city, order[i].contactNum,
-           order[i].totalItem, order[i].status);
-    for (int j = 0; j < order[i].totalItem; j++) {
-      printf("%s\t%d\n", order[i].medName[j], order[i].qty[j]);
-    }
-    printf("%d\n", order[i].orderId);
-  }
+void addOrder() {
+  oTop++;
+  order[oTop].orderId = oTop + 101;
+  printf("Order ID: %d\n", order[oTop].orderId);
+  printf("Name: ");
+  scanf(" %[^\n]%*c", order[oTop].name);
+  printf("Address: ");
+  scanf("%[^\n]%*c", order[oTop].address);
+  printf("Contact Number: ");
+  scanf("%[^\n]%*c", order[oTop].contactNum);
+  addReceipt(1);
+  order[oTop].receiptId = rec[rTop].RID;
+  orderInfoWrite();
+  // printf("\n\n\nOrder Placed Successfully!!\n");
+  // goBack();
+  // menu();
 }
 
 void orderInfoWrite() {
@@ -794,14 +923,8 @@ void orderInfoWrite() {
   }
   fprintf(fpwotop, "%d", oTop);
   for (int i = 0; i <= oTop; i++) {
-    fprintf(fpworder, ORDER_INFO_OUT_START, order[i].firstName,
-            order[i].lastName, order[i].area, order[i].city,
-            order[i].contactNum, order[i].totalItem, order[i].status);
-    for (int j = 0; j < order[i].totalItem; j++) {
-      fprintf(fpworder, ORDER_INFO_OUT_MID, order[i].medName[j],
-              order[i].qty[j]);
-    }
-    fprintf(fpworder, ORDER_INFO_OUT_END, order[i].orderId);
+    fprintf(fpworder, ORDER_INFO_OUT, order[i].orderId, order[i].receiptId,
+            order[i].name, order[i].address, order[i].contactNum);
   }
   fclose(fpworder);
   fclose(fpwotop);
@@ -818,112 +941,398 @@ void orderInfoRead() {
   }
   fscanf(fprotop, "%d", &oTop);
   for (int i = 0; i <= oTop; i++) {
-    fscanf(fprorder, ORDER_INFO_IN_START, &order[i].orderId, order[i].firstName,
-           order[i].lastName, order[i].area, order[i].city, order[i].contactNum,
-           order[i].totalItem, order[i].status);
-    for (int j = 0; j < order[i].totalItem; j++) {
-      fscanf(fprorder, ORDER_INFO_IN_MID, order[i].medName[j], order[i].qty[j]);
-    }
-    fscanf(fprorder, ORDER_INFO_IN_END, order[i].orderId);
+    fscanf(fprorder, ORDER_INFO_IN, &order[i].orderId, &order[i].receiptId,
+           order[i].name, order[i].address, order[i].contactNum);
   }
   fclose(fprorder);
   fclose(fprotop);
 }
 
-void testOrder() {
-  oTop++;
-  order[oTop].orderId = oTop + 101;
-  strcpy(order[oTop].firstName, "Tamanna");
-  strcpy(order[oTop].lastName, "Khatun");
-  strcpy(order[oTop].area, "Savar");
-  strcpy(order[oTop].city, "Dhaka");
-  strcpy(order[oTop].contactNum, "0123456789");
-  order[oTop].totalItem = 2;
-  strcpy(order[oTop].status, "incomplete");
-  for (int i = 0; i < order[oTop].totalItem; i++) {
-    scanf("%s", order[oTop].medName[i]);
-    scanf("%d", &order[oTop].qty[i]);
-  }
-  orderInfoWrite();
+void displayOrder() {
+  int id;
+  scanf("%d", &id);
+  system("clear");
+  // for (int i = 0; i <= oTop; i++) {
+  //   printf("%d\n%s\n%s\n%s\n", order[i].orderId, order[i].name,
+  //        order[i].address, order[i].contactNum);
+  printf("Order ID: %d\n", order[id - 101].orderId);
+  printf("Customer Name: %s\n", order[id - 101].name);
+  printf("Address: %s\n", order[id - 101].address);
+  printf("Contact Number: %s\n", order[id - 101].contactNum);
+  displayReceipt(id - 101);
+  // }
 }
 
-// RECIEPT PART
+void Orders() {
+  system("clear");
+  // int id;
+  // printf("%d\n", oTop);
+  for (int i = 0; i <= oTop; i++) {
+    printf("%d\t%s\t", order[i].orderId, order[i].name);
+    // printf("Order ID: %d\t", order[id-101].orderId);
+    // printf("Customer Name: %s\t", order[id-101].name);
+    printf("%s\n", rec[i].rDate);
 
-typedef struct receipt {
-  int RID;
-  char cName[30];
-  char cPhone[20];
-  int items;
-  char rDate[30];
-  char rTime[20];
-  char meds[30][50];
-  double unitPrice[30];
-  int units[30];
-  double totalPrice;
-} receipt;
-receipt rec[10];
-int rTop = -1;
-void addReceipt() {
-  int i = 0, med_id;
+    //  printf("Address: %s\n", order[i].address);
+    //    printf("Contact Number: %s\n\n", order[i].contactNum);
+  }
+  displayOrder();
+}
+
+// sales info
+
+void sales() { // Incomplete
+  int choice;
+  while (choice != 0) {
+    system("clear");
+    printf("\n\n");
+    printf("                       SALES\n");
+    printf("%s\n", RB);
+    printf("                    Your options\n");
+    printf("%s", RB);
+    printf("\n1. Make Receipts\t\t\t\t\t\tTotal Sale: $%0.2lf", Total_Sales);
+    printf("\n2. Order List\t\t\t\t\t\t\tProfit: $%.2lf",
+           Total_Sales * (10.0 / 100.0));
+    printf("\n3. Receipts");
+    printf("\n0. Return\n");
+    printf("%s\n", RB);
+
+    printf("Select an option: ");
+    scanf("%d", &choice);
+
+    switch (choice) {
+    case 1:
+      addReceipt(0);
+      break;
+    case 2:
+      Orders();
+      break;
+    case 3:
+      Receipts();
+      break;
+    case 0:
+      break;
+    default:
+      system("clear");
+      printf("\nWrong Input, Try Again!\n\n");
+    }
+    if (choice == 0)
+      break;
+  }
+}
+// RECIEPT PART -incomplete
+
+const char *RECEIPT_OUT_A = "%d \"%s\" \"%s\" \"%s\" %d %d \"%s\" %d\n";
+const char *RECEIPT_OUT_B = "\"%s\" %d %lf\n";
+const char *RECEIPT_OUT_C = "%lf\n\n";
+
+const char *RECEIPT_IN_A =
+    "%d \"%[^\"]\" \"%[^\"]\" \"%[^\"]\" %d %d \"%[^\"]\" %d\n";
+const char *RECEIPT_IN_B = "\"%[^\"]\" %d %lf\n";
+const char *RECEIPT_IN_C = "%lf\n\n";
+char *testing;
+
+void addReceipt(int Bool) {
+  if (rTop < 100) {
+
+    rTop++;
+    rec[rTop].RID = rTop + 101;
+    rec[rTop].totalPrice = 0.0;
+    if (Bool)
+      printf("\n\n");
+    printf("Receipt ID: %d\n", rec[rTop].RID);
+    // time_t currentTime;
+    // time(&currentTime);
+    // strncpy(rec[rTop].rDate, ctime(&currentTime), 24);
+    printf("%s\n", rec[rTop].rDate);
+    if (Bool) {
+      order[oTop].receiptId = rec[rTop].RID;
+      strcpy(rec[rTop].cName, order[oTop].name);
+      strcpy(rec[rTop].cPhone, order[oTop].contactNum);
+      printf("Customer Name: %s\n", rec[rTop].cName);
+      printf("Phone: %s\n", rec[rTop].cPhone);
+
+    } else {
+      printf("Customer Name: ");
+      scanf(" %[^\n]%*c", rec[rTop].cName);
+      printf("Phone: ");
+      scanf("%[^\n]%*c", rec[rTop].cPhone);
+    }
+    printf("Number of item(s): ");
+    scanf("%d", &rec[rTop].items);
+    int id, i = 0;
+    int res = 0;
+    while (i < rec[rTop].items) {
+      if (res == 0 && search(0) <1) {
+        printf("\n***Showing all available data***\n\n");
+        display();
+        res++;
+      } 
+    RE:
+      printf("\nMedID: ");
+      scanf("%d", &id);
+      if (id < 101 || id > drug[top].MedID) {
+        printf("Wrong id try again!\n");
+        goto RE;
+      }
+
+      else {
+        strcpy(rec[rTop].meds[i], drug[id - 101].brandName);
+        printf("Unit(s): ");
+        scanf("%d", &rec[rTop].units[i]);
+        drug[id - 101].inStock -= rec[rTop].units[i];
+        rec[rTop].unitPrice[i] = drug[id - 101].pricePerUnit;
+        rec[rTop].totalPrice += (rec[rTop].units[i]) * (rec[rTop].unitPrice[i]);
+        i++;
+        printf("added!\n");
+      }
+    }
+    currentTime();
+    currentDate();
+    Total_Sales += rec[rTop].totalPrice;
+    updateReceipts();
+    system("clear");
+    displayReceipt(rTop);
+  }
+}
+void test() {
   rTop++;
-  printf("Customer: ");
-  scanf("%[^\n]%*c", rec[rTop].cName);
-  printf("Phone: ");
-  scanf("%[^\n]%*c", rec[rTop].cPhone);
+  rec[rTop].RID = rTop + 101;
+
   time_t currentTime;
   time(&currentTime);
-  strcpy(rec[rTop].rDate, ctime(&currentTime));
-  printf("Number of items: ");
-  scanf("%d", &rec[rTop].items);
-  while (i < rec[rTop].items) {
-    printf("Item %d(MedID): ", i + 1);
-    scanf("%d", &med_id);
-    strcpy(rec[rTop].meds[i], drug[med_id - 101].brandName);
-    rec[rTop].unitPrice[i] = drug[med_id - 101].pricePerUnit;
-    printf("Units: ");
-    scanf("%d", &rec[rTop].units[i]);
-    rec[rTop].totalPrice += (rec[rTop].unitPrice[i] * rec[rTop].units[i]);
-    i++;
+  strcpy(rec[rTop].cName, "orthee j.");
+  strcpy(rec[rTop].cPhone, "017XXXXXXX");
+  rec[rTop].items = 3;
+  strcpy(rec[rTop].rDate, "24/04/2202");
+  rec[rTop].totalPrice = 0.0;
+  for (int i = 0; i < rec[rTop].items; i++) {
+    strcpy(rec[rTop].meds[i], drug[i].brandName);
+    rec[rTop].units[i] = i + 1;
+    rec[rTop].unitPrice[i] = drug[i].pricePerUnit;
+    rec[rTop].totalPrice += (rec[rTop].units[i] * rec[rTop].unitPrice[i]);
   }
 }
-void displayReceipt() {
+
+void updateReceipts() {
+  FILE *fpw, *fpwt, *fpwsales;
+  fpwsales = fopen("salesRecord.dat", "w");
+  fpw = fopen("receipts.dat", "w");
+  fpwt = fopen("rTop.dat", "w");
+  if (fpw == NULL || fpwt == NULL || fpwsales == NULL) {
+    printf("Failed to open file in write mode\n");
+    exit(1);
+  }
+  fprintf(fpwsales, "%.2lf", Total_Sales);
+  fprintf(fpwt, "%d", rTop);
+  for (int i = 0; i <= rTop; i++) {
+    fprintf(fpw, RECEIPT_OUT_A, rec[i].RID, rec[i].cName, rec[i].cPhone,
+            rec[i].rDate, rec[i].hour, rec[i].min, rec[i].AMPM, rec[i].items);
+    for (int j = 0; j < rec[i].items; j++)
+      fprintf(fpw, RECEIPT_OUT_B, rec[i].meds[j], rec[i].units[j],
+              rec[i].unitPrice[j]);
+    fprintf(fpw, RECEIPT_IN_C, rec[i].totalPrice);
+  }
+  fclose(fpw);
+  fclose(fpwt);
+  fclose(fpwsales);
+}
+
+void loadReceipts() {
+  FILE *fpr, *fprt, *fprsales;
+  fpr = fopen("receipts.dat", "r");
+  fprt = fopen("rTop.dat", "r");
+  fprsales = fopen("salesRecord.dat", "r");
+  if (fpr == NULL || fprt == NULL || fprsales == NULL) {
+    printf("Failed to open file in write mode\n");
+    exit(1);
+  }
+  fscanf(fprsales, "%lf", &Total_Sales);
+  fscanf(fprt, "%d", &rTop);
+  for (int i = 0; i <= rTop; i++) {
+    fscanf(fpr, RECEIPT_IN_A, &rec[i].RID, rec[i].cName, rec[i].cPhone,
+           rec[i].rDate, &rec[i].hour, &rec[i].min, rec[i].AMPM, &rec[i].items);
+    for (int j = 0; j < rec[i].items; j++)
+      fscanf(fpr, RECEIPT_IN_B, rec[i].meds[j], &rec[i].units[j],
+             &rec[i].unitPrice[j]);
+    fscanf(fpr, RECEIPT_IN_C, &rec[i].totalPrice);
+  }
+
+  fclose(fpr);
+  fclose(fprt);
+  fclose(fprsales);
+}
+
+void currentDate() {
+  time_t t;
+  t = time(NULL);
+  struct tm tm = *localtime(&t);
+  char day[100], month[100], year[100];
+  sprintf(day, "%d", tm.tm_mday);
+  int m;
+  m = tm.tm_mon + 1;
+  switch (m) {
+  case 1:
+    strcpy(month, " Jan, ");
+    break;
+  case 2:
+    strcpy(month, " Feb, ");
+    break;
+  case 3:
+    strcpy(month, " Mar, ");
+    break;
+  case 4:
+    strcpy(month, " Apr, ");
+    break;
+  case 5:
+    strcpy(month, " May, ");
+    break;
+  case 6:
+    strcpy(month, " June, ");
+    break;
+  case 7:
+    strcpy(month, " July, ");
+    break;
+  case 8:
+    strcpy(month, " Aug, ");
+    break;
+  case 9:
+    strcpy(month, " Sep, ");
+    break;
+  case 10:
+    strcpy(month, " Oct, ");
+    break;
+  case 11:
+    strcpy(month, " Nov, ");
+    break;
+  case 12:
+    strcpy(month, " Dec, ");
+    break;
+  }
+  sprintf(year, "%d", tm.tm_year + 1900);
+  strcat(day, month);
+  strcat(day, year);
+  strcpy(rec[rTop].rDate, day);
+}
+
+void currentTime() {
+  time_t t;
+  int hour, min;
+  t = time(NULL);
+  struct tm tm = *localtime(&t);
+  if (tm.tm_hour >= 12) {
+    if (tm.tm_hour == 12) {
+      hour = 12;
+      rec[rTop].hour = hour;
+    } else {
+      hour = tm.tm_hour - 12;
+      rec[rTop].hour = hour;
+      min = tm.tm_min;
+      rec[rTop].min = min;
+      strcpy(rec[rTop].AMPM, "AM");
+    }
+  } else
+    hour = tm.tm_hour;
+  min = tm.tm_min;
+  strcpy(rec[rTop].AMPM, "PM");
+}
+
+void Receipts() {
   system("clear");
   for (int i = 0; i <= rTop; i++) {
-    printf("Date/Time: %s\n", rec[i].rDate);
-    printf("Customer: %s\n", rec[i].cName);
-    printf("Phone: %s\n", rec[i].cPhone);
-    printf("\n___________________________________________\n");
-    printf("item\t\t\tamount\t\t\tunit price\n");
-    printf("\n___________________________________________\n");
-    for (int j = 0; j < rec[i].items; j++) {
-      printf("%s", rec[i].meds[j]);
-      printf("\t\t\t\t%.2d", rec[i].units[j]);
-      printf("\t\t\t\t%.2lf\n", rec[i].unitPrice[j]);
-    }
-    printf("\n___________________________________________\n");
-    printf("\n\t\t\t\t\t\tTotal: %.2lf\n", rec[i].totalPrice);
+    printf("%d\t%s\t", rec[i].RID, rec[i].cName);
+    printf("%s\n", rec[i].rDate);
   }
+  int id;
+  printf("\nInput ID to view details: ");
+  scanf("%d", &id);
+  displayReceipt(id - 101);
 }
-// void test() {
-//   sTop++;
-//   sup[sTop].supID = sTop + 101;
-//   // sup[sTop].comName = "Beximco Pharma";
-//   strcpy(sup[sTop].comName, "Beximco pharma");
-//   strcpy(sup[sTop].salesMan, "orthee j.");
-//   strcpy(sup[sTop].phnNum, "012312312");
-//   strcpy(sup[sTop].email, "orth@gmail.com");
-//   updatefileSup();
-// }
-int main() {
-   loadAll();
 
- // orderInfoRead();
-   //displayOrder();
+void displayReceipt(int id) {
+  system("clear");
+  int k, Length, L, P;
+  printf("\n");
+  printf("                      PHARMA-CARE\n");
+  printf("      Beribadh Road, Mohammadpur, Dhaka, Bangladesh\n");
+  printf("                Contact: 01**-*******\n");
+  printf("                Email: pharma-care@gmail.com\n");
+  printf("\n\n");
+  printf("RecieptID: %d\n", rec[id].RID);
+  printf("%s\n", RB);
+  printf("Customer name: %s\n", rec[id].cName);
+  printf("                                         %s", rec[id].rDate);
+  printf("\n");
+  printf("Phone number: %s", rec[id].cPhone);
+  P = 29 - strlen(rec[id].cPhone);
+  while (P != 0) {
+    printf(" ");
+    P--;
+  }
+  if (rec[id].hour <= 9) {
+    if (rec[id].min <= 9)
+      printf("0%d:0%d %s\n", rec[id].hour, rec[id].min, rec[id].AMPM);
+    else
+      printf("0%d:%d %s\n", rec[id].hour, rec[id].min, rec[id].AMPM);
+  } else
+    printf("%d:%d %s\n", rec[id].hour, rec[id].min, rec[id].AMPM);
+  printf("%s", RB);
+  printf("%s\n", RB);
+  printf("Item");
+  printf("                    Qty");
+  printf("                  Price\n");
+  printf("%s\n", RB);
+
+  for (int j = 0; j < rec[id].items; j++) {
+    printf("%s", rec[id].meds[j]);
+    k = 21 - strlen(rec[id].meds[j]);
+    while (k != 0) {
+      printf(" ");
+      k--;
+    }
+    printf("\t%d", rec[id].units[j]);
+    if (rec[id].units[j] <= 9)
+      Length = 21 - 1;
+    else if (rec[id].units[j] >= 10 && rec[id].units[j] <= 99)
+      Length = 21 - 2;
+    else if (rec[id].units[j] >= 100 && rec[id].units[j] <= 999)
+      Length = 21 - 3;
+    else {
+      L = 1 + (int)log10(rec[id].units[j]);
+      Length = 21 - L;
+    }
+    while (Length != 0) {
+      printf(" ");
+      Length--;
+    }
+    printf("$%0.2f", rec[id].unitPrice[j]);
+    printf("\n");
+  }
+  printf("%s\n", RB);
+  printf("                                  Total:     $%.2lf\n",
+         rec[id].totalPrice);
+  printf("\n\n\n");
+  printf("             !! THANK YOU FOR VISITING !!\n\n");
+  goBack();
+}
+
+int main() {
+  loadAll();
+  // orderInfoRead();
+  // addOrder();
+  // displayOrder();
   // system("clear");
   // AdminPanel();
-  //testOrder();
+  // testOrder();
   // orderInfoWrite();
   menu();
+  // AdminPanel();
+  // test();
+  // addReceipt(0);
+  // updateReceipts();
+  // loadReceipts();
+  // displayReceipt();
+  // techTeam();
 
   return 0;
 }

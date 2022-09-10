@@ -1,0 +1,2 @@
+Never Input Character in any menu!!! It'll break the code :)
+o.o

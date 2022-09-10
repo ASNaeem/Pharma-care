@@ -1,0 +1,3 @@
+fix uppercase-lowercase issue if there'e enough time
+re-search isn't needed for display all after wrong search key
+check wrong input for displaying receipts
